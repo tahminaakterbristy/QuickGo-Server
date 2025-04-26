@@ -1,0 +1,39 @@
+# Node.js dependencies
+node_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Production
+/build
+/dist
+
+# Environment files
+.env
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+
+# NPM package lock file
+package-lock.json
+
+# Yarn lock file
+yarn.lock
+
+# Test coverage
+coverage/
+
+# Server-specific files
+*.pem
+*.key
