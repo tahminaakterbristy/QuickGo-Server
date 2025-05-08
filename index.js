@@ -8,7 +8,14 @@ const app = express();
 const port = process.env.PORT || 6077;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://assaignment-10-1c679.web.app',
+    'https://assaignment-10-1c679.firebaseapp.com',
+    'http://localhost:5173'
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 
@@ -64,15 +71,33 @@ app.get('/testimonials', async (req, res) => {
  
 });
   // coverage operation
-  app.get("/coverages", async (req, res) => {
-    try {
-      const coverages = await coverageceCollection.find();
-      res.json(coverages);  // Return the data
-    } catch (error) {
-      console.error("Error fetching coverages:", error);
-      res.json([]);  // Return an empty array if error occurs
-    }
+  const coveredAreas = ["Dhaka", "Chattogram", "Rajshahi", "Sylhet", "Khulna", "Barisal"];
+
+
+const checkCoverage = (location) => {
+  return coveredAreas.includes(location);
+};
+
+// coverage operation
+app.get("/check-coverage", (req, res) => {
+  const { pickup, delivery, dropoff } = req.query;
+
+  if (!pickup || !delivery || !dropoff) {
+    return res.status(400).send({ message: "Please provide pickup, delivery, and dropoff locations" });
+  }
+
+  
+  const pickupStatus = checkCoverage(pickup) ? `${pickup} is covered` : `${pickup} is not covered`;
+  const deliveryStatus = checkCoverage(delivery) ? `${delivery} is covered` : `${delivery} is not covered`;
+  const dropoffStatus = checkCoverage(dropoff) ? `${dropoff} is covered` : `${dropoff} is not covered`;
+
+  // response
+  res.status(200).json({
+    pickupStatus,
+    deliveryStatus,
+    dropoffStatus
   });
+});
    
 // JWT create route
 app.post("/jwt", async (req, res) => {
@@ -113,7 +138,7 @@ app.get("/users", async (req, res) => {
   res.send(users);
 });
 // admin check
-app.get("/users/admin/:email", verifyToken, verifyAdmin, async (req, res) => {
+app.get("/users/admin/:email", verifyToken,  async (req, res) => {
   const email = req.params.email;
 
   const user = await usersCollection.findOne({ email: email });
@@ -144,7 +169,7 @@ app.patch("/users/admin/:id", async (req, res) => {
   const result = await usersCollection.updateOne(filter, updateDoc);
   res.send(result);
 });
-// remove from admin role
+// remove user from admin role
 app.patch("/users/remove-admin/:id", async (req, res) => {
   const id = req.params.id;
   const filter = { _id: new ObjectId(id) };
@@ -152,6 +177,24 @@ app.patch("/users/remove-admin/:id", async (req, res) => {
     $set: { role: "user" },  
   };
   const result = await usersCollection.updateOne(filter, updateDoc);
+  res.send(result);
+});
+
+
+// admin can't remove own role
+app.patch("/users/remove-admin/:id", verifyToken, verifyAdmin, async (req, res) => {
+  const adminEmail = req.user.email;
+  const id = req.params.id;
+  const userToRemove = await usersCollection.findOne({ _id: new ObjectId(id) });
+
+  if (userToRemove?.email === adminEmail) {
+    return res.status(403).send({ message: "You cannot remove your own admin access." });
+  }
+
+  const result = await usersCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { role: "user" } }
+  );
   res.send(result);
 });
 // delete user
@@ -171,7 +214,7 @@ app.delete('/users/:id', async (req, res) => {
 });
 
 // Get parcels by email
-app.get("/parcels", verifyToken, async (req, res) => {
+app.get("/parcels",  async (req, res) => {
   const email = req.query.email;
   if (!email) {
     return res.status(400).json({ message: "Email is required" });
@@ -181,31 +224,56 @@ app.get("/parcels", verifyToken, async (req, res) => {
 });
 
 // Create a new parcel
-app.post("/parcels", verifyToken, async (req, res) => {
+app.post("/parcels", async (req, res) => {
   const newParcel = req.body;
+   if (!newParcel.status) {
+    newParcel.status = "Pending";
+  }
   const result = await parcelCollection.insertOne(newParcel);
   res.send({ message: "Parcel created successfully", parcelId: result.insertedId });
 });
 
-// Update parcel (for user to edit parcel details)
-app.patch("/parcels/:id", verifyToken, async (req, res) => {
-  const id = req.params.id;
-  const { description, status } = req.body;
 
-  // Update the parcel with the new data
+
+
+// Route to approve a parcel (admin only)
+app.get("/admin/parcels", verifyToken, verifyAdmin, async (req, res) => {
+  try {
+    const allParcels = await parcelCollection.find().toArray();
+    res.send(allParcels);
+  } catch (err) {
+    console.error("Failed to fetch parcels for admin", err);
+    res.status(500).send({ message: "Failed to fetch parcels" });
+  }
+});
+// approve
+app.patch("/parcels/approve/:id", verifyToken, verifyAdmin, async (req, res) => {
+  const id = req.params.id;
   const result = await parcelCollection.updateOne(
     { _id: new ObjectId(id) },
-    { $set: { description, status } }
+    { $set: { status: "Approved" } }
   );
-
-  if (result.modifiedCount > 0) {
-    const updatedParcel = await parcelCollection.findOne({ _id: new ObjectId(id) });
-    res.send(updatedParcel); // Send back the updated parcel data
+  if (result.matchedCount > 0) {
+    res.send({ message: "Parcel approved successfully." });
   } else {
-    res.status(400).send({ message: "Failed to update parcel." });
+    res.status(400).send({ message: "Parcel not found." });
   }
 });
 
+
+// Deliver API
+app.patch("/parcels/deliver/:id", verifyToken, verifyAdmin, async (req, res) => {
+  const { id } = req.params;
+  const result = await parcelCollection.updateOne(
+    { _id: new ObjectId(id) },
+    { $set: { status: "Delivered" } }
+  );
+  if (result.matchedCount > 0) {
+    res.send({ message: "Parcel marked as delivered." });
+  } else {
+    res.status(404).send({ message: "Parcel not found." });
+  }
+});
 // Delete parcel (for admin only)
 app.delete("/parcels/:id", verifyToken, verifyAdmin, async (req, res) => {
   const id = req.params.id;
@@ -217,39 +285,28 @@ app.delete("/parcels/:id", verifyToken, verifyAdmin, async (req, res) => {
   }
 });
 
-// Admin route to view all parcels
-app.get("/admin/parcels", verifyToken, verifyAdmin, async (req, res) => {
-  const parcels = await parcelCollection.find({}).toArray();
-  res.send(parcels);
-});
-
-// Route to delete a parcel
-app.delete("/parcels/:id", async (req, res) => {
-  const id = req.params.id;
-  const result = await parcelCollection.deleteOne({ _id: new ObjectId(id) });
-  res.send(result);
-});
-
-// Route to approve a parcel (admin only)
-app.get("/admin/parcels",  async (req, res) => {
+// Parcel Status Analytics for Admin Dashboard
+app.get('/admin/parcel-status', verifyToken, verifyAdmin, async (req, res) => {
   try {
-    const allParcels = await parcelCollection.find().toArray();
-    res.send(allParcels);
-  } catch (err) {
-    console.error("Failed to fetch parcels for admin", err);
-    res.status(500).send({ message: "Failed to fetch parcels" });
-  }
-});
-app.patch("/parcels/approve/:id", verifyToken,verifyAdmin, async (req, res) => {
-  const id = req.params.id;
-  const result = await parcelCollection.updateOne(
-    { _id: new ObjectId(id) },
-    { $set: { status: "Approved" } }
-  );
-  if (result.modifiedCount > 0) {
-    res.send({ message: "Parcel approved successfully." });
-  } else {
-    res.status(400).send({ message: "Failed to approve parcel." });
+    const total = await parcelCollection.estimatedDocumentCount();
+    const approved = await parcelCollection.countDocuments({ status: 'Approved' });
+    const pending = await parcelCollection.countDocuments({ status: 'Pending' }); 
+    const delivered = await parcelCollection.countDocuments({ status: 'Delivered' });
+
+    console.log('Total:', total);
+    console.log('Approved:', approved);
+    console.log('Pending:', pending);
+    console.log('Delivered:', delivered);
+
+    res.send({
+      total,
+      approved,
+      pending,
+      delivered
+    });
+  } catch (error) {
+    console.error("Error fetching parcel status analytics:", error);
+    res.status(500).send({ message: "Internal server error" });
   }
 });
 

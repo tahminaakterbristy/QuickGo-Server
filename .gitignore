@@ -37,3 +37,4 @@ coverage/
 # Server-specific files
 *.pem
 *.key
+.vercel
