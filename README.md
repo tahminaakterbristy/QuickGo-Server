@@ -34,5 +34,5 @@ Before you begin, ensure you have installed:
 ###  Installation
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-username/your-server-repo.git
-cd your-server-repo
+git clone https://github.com/tahminaakterbristy/QuickGo-Server.git
+cd QuickGo-Server
