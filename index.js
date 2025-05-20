@@ -12,6 +12,7 @@ app.use(cors({
   origin: [
     'https://assaignment-10-1c679.web.app',
     'https://assaignment-10-1c679.firebaseapp.com',
+    'https://lustrous-puffpuff-512549.netlify.app',
     'http://localhost:5173'
   ],
   credentials: true
@@ -226,11 +227,27 @@ app.get("/parcels",  async (req, res) => {
 // Create a new parcel
 app.post("/parcels", async (req, res) => {
   const newParcel = req.body;
-   if (!newParcel.status) {
+
+  // Tracking Code Generator Function
+  const generateTrackingCode = () => {
+    return 'TRK-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+  };
+
+  // Add tracking code and default status
+  newParcel.trackingCode = generateTrackingCode();
+
+  if (!newParcel.status) {
     newParcel.status = "Pending";
   }
+
   const result = await parcelCollection.insertOne(newParcel);
-  res.send({ message: "Parcel created successfully", parcelId: result.insertedId });
+
+  //  Send back the tracking code to frontend
+  res.send({
+    message: "Parcel created successfully",
+    trackingCode: newParcel.trackingCode,
+    parcelId: result.insertedId
+  });
 });
 
 
@@ -286,7 +303,7 @@ app.delete("/parcels/:id", verifyToken, verifyAdmin, async (req, res) => {
 });
 
 // Parcel Status Analytics for Admin Dashboard
-app.get('/admin/parcel-status', verifyToken, verifyAdmin, async (req, res) => {
+app.get('/parcels/admin/parcel-status', verifyToken, verifyAdmin, async (req, res) => {
   try {
     const total = await parcelCollection.estimatedDocumentCount();
     const approved = await parcelCollection.countDocuments({ status: 'Approved' });
@@ -309,8 +326,27 @@ app.get('/admin/parcel-status', verifyToken, verifyAdmin, async (req, res) => {
     res.status(500).send({ message: "Internal server error" });
   }
 });
+// parcel tracking API
+app.get("/parcels/track/:trackingCode", async (req, res) => {
+  const { trackingCode } = req.params;
+  const parcel = await parcelCollection.findOne({ trackingCode });
 
+  if (!parcel) {
+    return res.status(404).send({ message: "Parcel not found" });
+  }
 
+  res.send(parcel);
+});
+app.get("/parcels/track/:trackingCode", async (req, res) => {
+  const { trackingCode } = req.params;
+  const parcel = await parcelCollection.findOne({ trackingCode });
+
+  if (!parcel) {
+    return res.status(404).send({ message: "Parcel not found" });
+  }
+
+  res.send(parcel);
+});
     
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
