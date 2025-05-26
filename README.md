@@ -1,4 +1,7 @@
 # Server for QuickGo Courier
+# Live site: https://quick-goo.netlify.app
+# Client-side repository: https://github.com/tahminaakterbristy/QuickGo-Courier
+
 
 This is the backend/server-side application for the "QuickGo Courier" web application. It handles RESTful API routes, communicates with the MongoDB database, manages authentication and authorization, and processes all the core logic required by the frontend.
 
